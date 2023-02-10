@@ -87,9 +87,12 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
+        self.proj = nn.Linear(n_embed, n_embed)
 
     def forward(self, x):
-        return torch.cat([h(x) for h in self.heads], dim=-1)
+        out = torch.cat([h(x) for h in self.heads], dim=-1)
+        out = self.proj(out)
+        return out
 
 class FeedForward(nn.Module):
     """a simple linear layer followed by a non-linearity""" 
@@ -97,8 +100,9 @@ class FeedForward(nn.Module):
     def __init__(self, n_embed):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(n_embed, n_embed),
+            nn.Linear(n_embed, 4 * n_embed),
             nn.ReLU(),
+            nn.Linear(4 * n_embed, n_embed),
         )
 
     def forward(self, x):
@@ -118,8 +122,8 @@ class Block(nn.Module):
         self.ffwd = FeedForward(n_embed)
 
     def forward(self, x):
-        x = self.sa_heads(x) # (B,T,C)
-        x = self.ffwd(x) + x # (B,T,C)
+        x = x + self.sa_heads(x) # (B,T,C)
+        x = x + self.ffwd(x) # (B,T,C)
         return x
 
 # super simple bigram model
@@ -131,7 +135,6 @@ class BigramLanguageModel(nn.Module):
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
         self.position_embedding_table = nn.Embedding(block_size, n_embed)
         self.blocks = nn.Sequential(
-            Block(n_embed, n_heads=4),
             Block(n_embed, n_heads=4),
             Block(n_embed, n_heads=4),
             Block(n_embed, n_heads=4),
